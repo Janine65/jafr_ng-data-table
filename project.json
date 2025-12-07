@@ -1,0 +1,33 @@
+{
+  "name": "data-table",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "src_datatable/src",
+  "prefix": "lib",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/angular:ng-packagr-lite",
+      "options": {
+        "project": "src_datatable/ng-package.json"
+      },
+      "configurations": {
+        "production": {
+          "tsConfig": "src_datatable/tsconfig.lib.prod.json"
+        },
+        "development": {
+          "tsConfig": "src_datatable/tsconfig.lib.json"
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "options": {
+        "jestConfig": "src_datatable/jest.config.ts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

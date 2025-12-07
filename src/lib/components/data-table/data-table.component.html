@@ -1,0 +1,257 @@
+<!-- src/app/components/common/data-table/data-table.component.html -->
+<div class="data-table-container">
+  <!-- Actions Panel (conditionally shown above table when data exists) -->
+  <syr-data-table-actions-panel
+    *ngIf="
+      mergedConfig.enableActionsPanel &&
+      data.length > 0 &&
+      ((actionsPanelButtons && actionsPanelButtons.length > 0) ||
+        (mergedConfig.showActionsPanelExport !== false &&
+          mergedConfig.enableExport !== false) ||
+        mergedConfig.enableGlobalSearch)
+    "
+    [header]="mergedConfig.actionsPanelHeader || 'Actions'"
+    [toggleable]="true"
+    [collapsed]="false"
+    [actions]="actionsPanelButtons"
+    [showExport]="
+      mergedConfig.showActionsPanelExport !== false &&
+      mergedConfig.enableExport !== false
+    "
+    [exportLabel]="currentExportLabel"
+    [exportIcon]="'pi pi-download'"
+    [exportSeverity]="'secondary'"
+    [exportTooltip]="currentExportLabel"
+    [exportMenuItems]="exportMenuItems"
+    [showGlobalSearch]="!!(mergedConfig.enableGlobalSearch && !loading)"
+    [globalSearchValue]="currentGlobalFilter"
+    [globalSearchPlaceholder]="'In Resultaten suchen'"
+    (globalSearchChange)="onGlobalSearchInputFromPanel($event)"
+    (exportClick)="performExport()"
+  ></syr-data-table-actions-panel>
+
+  <!-- Always visible header: Custom action buttons only (export and search moved to actions panel) -->
+  <div
+    class="table-header-controls"
+    *ngIf="customActionButtons && customActionButtons.length > 0 && !loading"
+  >
+    <div class="header-actions">
+      <!-- Custom Action Buttons -->
+      <div class="custom-actions-container">
+        <ng-container *ngFor="let action of customActionButtons">
+          <p-button
+            *ngIf="action.visible !== false"
+            [label]="action.label | translate"
+            [icon]="action.icon"
+            [severity]="action.severity || 'secondary'"
+            [disabled]="isToolbarActionDisabled(action)"
+            [pTooltip]="action.tooltip ? (action.tooltip | translate) : ''"
+            (onClick)="action.command(selectedRows)"
+          ></p-button>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content Area: Spinner or Table -->
+  <div class="table-content-area">
+    <div *ngIf="loading" class="loading-spinner-wrapper">
+      <lib-loading-spinner
+        [spinnerVisible]="true"
+        loadingText="Daten werden geladen..."
+      ></lib-loading-spinner>
+    </div>
+
+    <div *ngIf="!loading" class="data-table-actual-wrapper">
+      <p-table
+        #dt
+        [value]="data"
+        [columns]="displayColumns"
+        [(selection)]="selectedRows"
+        (onRowSelect)="onRowSelect($event)"
+        (onRowUnselect)="onRowUnselect($event)"
+        [selectionMode]="mergedConfig.selectionMode!"
+        [dataKey]="mergedConfig.dataKey!"
+        [tableStyle]="{ 'min-width': '50rem' }"
+        [paginator]="
+          mergedConfig.enablePagination! && data.length > mergedConfig.pageSize!
+        "
+        [rows]="mergedConfig.pageSize!"
+        [rowsPerPageOptions]="mergedConfig.rowsPerPageOptions!"
+        (onPage)="onPageChange($event)"
+        [sortMode]="mergedConfig.enableSorting ? 'multiple' : 'single'"
+        (onSort)="onSort($event)"
+        (onFilter)="onFilter($event)"
+        [filterDelay]="mergedConfig.filterDelay || 300"
+        [globalFilterFields]="getGlobalFilterFields()"
+        [scrollable]="!!mergedConfig.scrollHeight"
+        [scrollHeight]="mergedConfig.scrollHeight"
+        [rowHover]="true"
+        class="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+        responsiveLayout="scroll"
+      >
+        <ng-template pTemplate="header" let-columns>
+          <tr>
+            <th
+              *ngFor="let col of columns"
+              [pSortableColumn]="
+                mergedConfig.enableSorting ? col.field : undefined
+              "
+              [pSortableColumnDisabled]="
+                !(mergedConfig.enableSorting && col.sortable !== false)
+              "
+              [ngClass]="col.headerStyleClass"
+              [style.minWidth]="col.minWidth"
+            >
+              {{ col.header || "" | translate }}
+              <p-sortIcon
+                *ngIf="mergedConfig.enableSorting && col.sortable !== false"
+                [field]="col.field"
+              ></p-sortIcon>
+              <div
+                *ngIf="mergedConfig.enableColumnFiltering && col.filterable"
+                class="p-fluid mt-1"
+                (click)="$event.stopPropagation()"
+              >
+                <ng-container [ngSwitch]="col.filterType || 'text'">
+                  <input
+                    *ngSwitchCase="'text'"
+                    pInputText
+                    type="text"
+                    [(ngModel)]="columnFilters[col.field]"
+                    (ngModelChange)="
+                      dt.filter(
+                        $event,
+                        col.field,
+                        col.filterMatchMode || 'contains'
+                      )
+                    "
+                    [placeholder]="col.filterPlaceholder || 'Suchen'"
+                    class="p-column-filter"
+                  />
+                  <p-inputNumber
+                    *ngSwitchCase="'numeric'"
+                    [(ngModel)]="columnFilters[col.field]"
+                    (ngModelChange)="
+                      dt.filter(
+                        $event,
+                        col.field,
+                        col.filterMatchMode || 'equals'
+                      )
+                    "
+                    mode="decimal"
+                    [showButtons]="true"
+                    [placeholder]="col.filterPlaceholder || 'Filter'"
+                    class="p-column-filter"
+                  ></p-inputNumber>
+                  <p-datepicker
+                    *ngSwitchCase="'date'"
+                    [(ngModel)]="columnFilters[col.field]"
+                    (ngModelChange)="
+                      dt.filter(
+                        $event,
+                        col.field,
+                        col.filterMatchMode || 'dateIs'
+                      )
+                    "
+                    [dateFormat]="col.format || 'dd.mm.yy'"
+                    [placeholder]="col.filterPlaceholder || 'Datum'"
+                    [showIcon]="true"
+                    class="p-column-filter"
+                  ></p-datepicker>
+                  <p-select
+                    *ngSwitchCase="'boolean'"
+                    [(ngModel)]="columnFilters[col.field]"
+                    [options]="booleanFilterOptions"
+                    (ngModelChange)="
+                      dt.filter(
+                        $event,
+                        col.field,
+                        col.filterMatchMode || 'equals'
+                      )
+                    "
+                    placeholder="Alle"
+                    [showClear]="true"
+                    class="p-column-filter"
+                  >
+                    <ng-template let-option pTemplate="item">
+                      <span>{{ option.label }}</span>
+                    </ng-template>
+                  </p-select>
+                </ng-container>
+              </div>
+            </th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-rowData let-columns="columns">
+          <tr [pSelectableRow]="rowData">
+            <td
+              *ngFor="let col of columns"
+              [ngClass]="col.class"
+              [style.minWidth]="col.minWidth"
+            >
+              <!-- Check for async transform first -->
+              <ng-container *ngIf="col.async && (col.transform || col.transformKey); else syncRender">
+                {{ $any(getCellData(rowData, col)) | async }}
+              </ng-container>
+
+              <!-- Synchronous rendering (default) -->
+              <ng-template #syncRender>
+                <ng-container [ngSwitch]="col.type">
+                  <ng-container *ngSwitchCase="'date'">
+                    {{
+                      getCellDataAsDate(rowData, col)
+                        | date : col.format || "dd.MM.yyyy"
+                    }}
+                  </ng-container>
+                  <ng-container *ngSwitchCase="'number'">
+                    {{ getCellDataAsNumber(rowData, col) | number }}
+                  </ng-container>
+                  <ng-container *ngSwitchCase="'boolean'">
+                    {{ getCellData(rowData, col) }}
+                  </ng-container>
+                  <ng-container *ngSwitchCase="'custom'">
+                    <div [innerHTML]="getCellDataAsString(rowData, col)"></div>
+                  </ng-container>
+                  <ng-container *ngSwitchCase="'actions'">
+                    <button
+                      type="button"
+                      pButton
+                      icon="pi pi-ellipsis-v"
+                      class="p-button-text p-button-rounded p-button-secondary"
+                      (click)="menu.toggle($event)"
+                    ></button>
+                    <p-menu
+                      #menu
+                      [model]="getRowActionMenuItems(rowData, col)"
+                      [popup]="true"
+                      appendTo="body"
+                    ></p-menu>
+                  </ng-container>
+                  <ng-container *ngSwitchDefault>
+                    {{ getCellData(rowData, col) }}
+                  </ng-container>
+                </ng-container>
+              </ng-template>
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td
+              [attr.colspan]="
+                displayColumns && displayColumns.length > 0
+                  ? displayColumns.length
+                  : 1
+              "
+            >
+              {{ mergedConfig.emptyMessage || "" | translate }}
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+</div>
